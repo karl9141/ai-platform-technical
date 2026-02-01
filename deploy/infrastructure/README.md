@@ -1,143 +1,301 @@
-# AI 平台一键部署
+# AI Platform - 一键部署方案
 
-一键部署完整的 AI 辅助平台环境。
+## 📋 概述
 
-## 包含组件
+本方案提供完整的一键部署能力，同时确保每个服务都是**生产级标准**、**可独立运维**的。
 
-| 组件 | 端口 | 说明 |
-|------|------|------|
-| N8N | 5678 | 工作流引擎 |
-| Dify | 3000 | AI 应用平台 |
-| PostgreSQL | 5432 | 数据库 |
-| Redis | 6379 | 缓存 |
-| Weaviate | 8080 | 向量数据库 |
-| Nginx | 80 | 反向代理 |
+---
 
-## 系统要求
+## 🏗️ 架构组件
 
-- Docker & Docker Compose
-- 8GB+ RAM (推荐)
-- 20GB+ 磁盘空间
+| 服务 | 端口 | 用途 | 独立运维 |
+|------|------|------|----------|
+| **PostgreSQL** | 5432 | 共享数据库 | ✅ |
+| **Redis** | 6379 | 缓存/队列 | ✅ |
+| **Weaviate** | 8080 | 向量数据库 | ✅ |
+| **N8N** | 5678 | 工作流引擎 | ✅ |
+| **Dify API** | 5001 | AI 应用后端 | ✅ |
+| **Dify Worker** | - | 后台任务 | ✅ |
+| **Dify Web** | 3000 | 前端界面 | ✅ |
+| **Nginx** | 80/3000 | 反向代理 | ✅ |
 
-## 快速启动
+---
 
-```bash
-# 启动所有服务
-docker-compose up -d
+## 🚀 一键部署
 
-# 查看状态
-docker-compose ps
+### Windows
+
+```powershell
+cd deploy\infrastructure
+.\deploy.ps1
 ```
 
-## 访问地址
+### Linux/macOS
 
-| 服务 | URL |
-|------|-----|
-| N8N | http://localhost:5678 |
-| Dify | http://localhost:3000 |
+```bash
+cd deploy/infrastructure
+chmod +x deploy.sh
+./deploy.sh
+```
 
-## 配置
+---
 
-### 使用 .env 文件
+## 📁 目录结构
 
-创建 `.env` 文件自定义配置：
+```
+deploy/infrastructure/
+├── docker-compose.yml      # 主配置文件
+├── .env.example            # 环境变量模板
+├── .env                    # 环境变量（自动生成）
+├── deploy.ps1              # Windows 部署脚本
+├── deploy.sh               # Linux/macOS 部署脚本
+├── init-scripts/           # 数据库初始化
+│   └── 01-init-db.sql
+├── nginx/                  # Nginx 配置
+│   ├── nginx.conf
+│   └── conf.d/
+│       └── default.conf
+├── n8n/                    # N8N 配置
+│   └── workflows/          # 工作流备份
+└── backup/                 # 备份目录
+```
 
-```env
+---
+
+## ⚙️ 配置说明
+
+### 环境变量 (`.env`)
+
+```bash
 # 数据库
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=your-secure-password
+POSTGRES_PASSWORD=你的安全密码
 
 # Redis
-REDIS_PASSWORD=your-secure-password
-
-# Dify
-DIFY_SECRET_KEY=your-secret-key
+REDIS_PASSWORD=你的安全密码
 
 # N8N
-N8N_HOST=your-domain.com
-N8N_WEBHOOK_URL=https://your-domain.com/
+N8N_ENCRYPTION_KEY=32位加密密钥
+WEBHOOK_URL=http://你的域名:5678/
+
+# Dify
+DIFY_SECRET_KEY=sk-32位密钥
 
 # 时区
 TIMEZONE=Asia/Tokyo
 ```
 
-## 初次设置
+---
 
-### 1. N8N 设置
+## 🔧 运维命令
 
-1. 访问 http://localhost:5678
-2. 创建管理员账户
-3. 配置凭据（Lark、Jira 等）
+### 服务管理
 
-### 2. Dify 设置
+| 操作 | Windows | Linux/macOS |
+|------|---------|-------------|
+| 启动 | `.\deploy.ps1 -Action start` | `./deploy.sh start` |
+| 停止 | `.\deploy.ps1 -Action stop` | `./deploy.sh stop` |
+| 重启 | `.\deploy.ps1 -Action restart` | `./deploy.sh restart` |
+| 状态 | `.\deploy.ps1 -Action status` | `./deploy.sh status` |
+| 日志 | `.\deploy.ps1 -Action logs` | `./deploy.sh logs` |
+| 备份 | `.\deploy.ps1 -Action backup` | `./deploy.sh backup` |
+| 清理 | `.\deploy.ps1 -Action clean` | `./deploy.sh clean` |
 
-1. 访问 http://localhost:3000
-2. 创建管理员账户
-3. 设置 → 模型供应商 → 添加 OpenAI API Key
-4. 创建 AI 应用
-
-### 3. 集成 N8N + Dify
-
-1. 在 Dify 中创建应用，获取 API Key
-2. 在 N8N 中创建 HTTP Request 节点
-3. 配置调用 Dify API
-
-## 常用命令
+### 单服务操作
 
 ```bash
-# 启动
-docker-compose up -d
+# 查看单个服务日志
+docker logs -f ai-platform-n8n
 
-# 停止
-docker-compose down
+# 重启单个服务
+docker restart ai-platform-dify-api
 
-# 重启
-docker-compose restart
-
-# 查看日志
-docker-compose logs -f
-
-# 查看特定服务日志
-docker-compose logs -f n8n
-docker-compose logs -f dify-api
+# 进入容器
+docker exec -it ai-platform-postgres psql -U postgres
 ```
 
-## 数据备份
+---
 
-```bash
-# 备份数据库
-docker exec ai-platform-postgres pg_dumpall -U postgres > backup.sql
+## ✅ 生产级特性
 
-# 备份卷
-docker run --rm -v ai_platform_postgres:/data -v $(pwd):/backup alpine tar czf /backup/postgres.tar.gz /data
+### 1. 健康检查
+
+每个服务都配置了健康检查：
+
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 60s
 ```
 
-## 故障排除
+### 2. 资源限制
 
-### 1. 内存不足
-
-减少组件或增加服务器内存。
-
-### 2. 端口冲突
-
-修改 docker-compose.yml 中的端口映射。
-
-### 3. 服务启动失败
-
-```bash
-# 查看日志
-docker-compose logs [service-name]
-
-# 重建服务
-docker-compose up -d --force-recreate [service-name]
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 2G
+    reservations:
+      memory: 1G
 ```
 
-## 升级
+### 3. 日志管理
+
+```yaml
+logging:
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "5"
+```
+
+### 4. 自动重启
+
+```yaml
+restart: unless-stopped
+```
+
+### 5. 依赖管理
+
+```yaml
+depends_on:
+  postgres:
+    condition: service_healthy
+```
+
+### 6. 数据持久化
+
+```yaml
+volumes:
+  postgres_data:
+    name: ai-platform-postgres-data
+```
+
+---
+
+## 📊 资源需求
+
+| 配置 | 最低 | 推荐 |
+|------|------|------|
+| **CPU** | 4 核 | 8 核 |
+| **内存** | 8 GB | 16 GB |
+| **磁盘** | 20 GB | 50 GB |
+
+### 服务内存分配
+
+| 服务 | 限制 | 预留 |
+|------|------|------|
+| PostgreSQL | 512 MB | 256 MB |
+| Redis | 256 MB | 128 MB |
+| Weaviate | 1 GB | 512 MB |
+| N8N | 1 GB | 512 MB |
+| Dify API | 2 GB | 1 GB |
+| Dify Worker | 1 GB | 512 MB |
+| Dify Web | 512 MB | 256 MB |
+| Nginx | 128 MB | 64 MB |
+| **总计** | **~6.5 GB** | **~3.2 GB** |
+
+---
+
+## 🔐 安全配置
+
+### 1. 密码强度
+
+- 所有密码使用随机生成的 32 位字符串
+- 部署脚本自动生成安全密钥
+
+### 2. 网络隔离
+
+```yaml
+networks:
+  ai-platform-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+```
+
+### 3. 生产环境建议
+
+1. **修改默认密码**: 编辑 `.env` 文件
+2. **启用 HTTPS**: 配置 SSL 证书
+3. **限制端口**: 仅暴露必要端口
+4. **定期备份**: 使用 `backup` 命令
+
+---
+
+## 💾 备份恢复
+
+### 备份
 
 ```bash
-# 拉取最新镜像
+# 自动备份
+./deploy.sh backup
+
+# 手动备份 PostgreSQL
+docker exec ai-platform-postgres pg_dumpall -U postgres > backup/pg_dump.sql
+```
+
+### 恢复
+
+```bash
+# 恢复数据库
+cat backup/pg_dump.sql | docker exec -i ai-platform-postgres psql -U postgres
+```
+
+---
+
+## 🔍 故障排查
+
+### 常见问题
+
+| 问题 | 解决方案 |
+|------|----------|
+| 端口占用 | 修改 `.env` 中的端口配置 |
+| 内存不足 | 增加 Docker Desktop 内存限制 |
+| 启动失败 | 查看日志: `docker logs ai-platform-xxx` |
+| 网络问题 | 重建网络: `docker network prune` |
+
+### 日志位置
+
+| 服务 | 日志命令 |
+|------|----------|
+| 全部 | `docker-compose logs -f` |
+| N8N | `docker logs -f ai-platform-n8n` |
+| Dify | `docker logs -f ai-platform-dify-api` |
+| PostgreSQL | `docker logs -f ai-platform-postgres` |
+
+---
+
+## 🔄 升级流程
+
+```bash
+# 1. 备份数据
+./deploy.sh backup
+
+# 2. 拉取新镜像
 docker-compose pull
 
-# 重启服务
+# 3. 重新部署
 docker-compose up -d
+
+# 4. 验证服务
+./deploy.sh status
 ```
+
+---
+
+## 📞 访问地址
+
+部署完成后：
+
+| 服务 | URL | 说明 |
+|------|-----|------|
+| **N8N** | http://localhost:5678 | 工作流管理 |
+| **Dify** | http://localhost:3000 | AI 应用平台 |
+| **PostgreSQL** | localhost:5432 | 数据库 |
+| **Redis** | localhost:6379 | 缓存 |
+| **Weaviate** | http://localhost:8080 | 向量数据库 |

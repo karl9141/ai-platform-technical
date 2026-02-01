@@ -1,225 +1,470 @@
 # =============================================================================
-# AI Platform - All-in-One Deployment
+# AI Platform - 生产级 Docker Compose 配置
 # =============================================================================
 #
-# 一键部署完整的 AI 辅助平台：N8N + Dify + 数据库
-#
-# 使用方法：
-#   1. 配置 .env 文件（可选）
-#   2. 运行: docker-compose up -d
-#   3. 访问:
-#      - N8N: http://localhost:5678
-#      - Dify: http://localhost:3000
+# 版本: 2.0
+# 特点:
+#   - 每个服务独立可运维
+#   - 完整的健康检查
+#   - 专业的日志配置
+#   - 数据持久化
+#   - 资源限制
+#   - 自动重启策略
 #
 # =============================================================================
 
 services:
   # ===========================================================================
-  # 共享基础设施
+  # 🐘 PostgreSQL - 共享数据库
   # ===========================================================================
-
-  # PostgreSQL - 共享数据库
   postgres:
     image: postgres:16-alpine
     container_name: ai-platform-postgres
+    hostname: postgres
     restart: unless-stopped
+
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ai_platform_2026}
-      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-AIPlatform2026}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      PGDATA: /var/lib/postgresql/data/pgdata
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+      - ./backup:/backup
+
+    ports:
+      - "5432:5432"
+
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}" ]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - ai-platform
+      start_period: 30s
 
-  # Redis - 缓存
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+    networks:
+      - ai-platform-network
+
+  # ===========================================================================
+  # ⚡ Redis - 缓存服务
+  # ===========================================================================
   redis:
     image: redis:7-alpine
     container_name: ai-platform-redis
+    hostname: redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD:-ai_platform_2026}
+
+    command: >
+      redis-server --requirepass ${REDIS_PASSWORD:-Redis2026} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
     volumes:
       - redis_data:/data
+
+    ports:
+      - "6379:6379"
+
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-Redis2026}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
     networks:
-      - ai-platform
+      - ai-platform-network
 
   # ===========================================================================
-  # N8N - 工作流引擎
+  # 🔍 Weaviate - 向量数据库
   # ===========================================================================
-
-  n8n:
-    image: docker.n8n.io/n8nio/n8n:latest
-    container_name: ai-platform-n8n
-    restart: unless-stopped
-    ports:
-      - "5678:5678"
-    environment:
-      # 数据库
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: postgres
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: n8n
-      DB_POSTGRESDB_USER: ${POSTGRES_USER:-postgres}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-ai_platform_2026}
-      # N8N 配置
-      N8N_HOST: ${N8N_HOST:-localhost}
-      N8N_PORT: 5678
-      N8N_PROTOCOL: http
-      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
-      # 时区
-      GENERIC_TIMEZONE: ${TIMEZONE:-Asia/Tokyo}
-      TZ: ${TIMEZONE:-Asia/Tokyo}
-    volumes:
-      - n8n_data:/home/node/.n8n
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - ai-platform
-
-  # ===========================================================================
-  # Dify - AI 应用平台
-  # ===========================================================================
-
-  # Dify API
-  dify-api:
-    image: langgenius/dify-api:latest
-    container_name: ai-platform-dify-api
-    restart: unless-stopped
-    environment:
-      MODE: api
-      SECRET_KEY: ${DIFY_SECRET_KEY:-sk-9f73s3ljTXVcMT3Blb3ljTqtsKiGHXVcMT3BlbkFJ}
-      # 数据库
-      DB_USERNAME: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-ai_platform_2026}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_DATABASE: dify
-      # Redis
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-ai_platform_2026}
-      # 存储
-      STORAGE_TYPE: local
-      STORAGE_LOCAL_PATH: /app/api/storage
-      # 向量数据库
-      VECTOR_STORE: weaviate
-      WEAVIATE_ENDPOINT: http://weaviate:8080
-      # 日志
-      LOG_LEVEL: INFO
-    volumes:
-      - dify_storage:/app/api/storage
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - ai-platform
-
-  # Dify Worker
-  dify-worker:
-    image: langgenius/dify-api:latest
-    container_name: ai-platform-dify-worker
-    restart: unless-stopped
-    environment:
-      MODE: worker
-      SECRET_KEY: ${DIFY_SECRET_KEY:-sk-9f73s3ljTXVcMT3Blb3ljTqtsKiGHXVcMT3BlbkFJ}
-      DB_USERNAME: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-ai_platform_2026}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_DATABASE: dify
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-ai_platform_2026}
-      STORAGE_TYPE: local
-      STORAGE_LOCAL_PATH: /app/api/storage
-      VECTOR_STORE: weaviate
-      WEAVIATE_ENDPOINT: http://weaviate:8080
-    volumes:
-      - dify_storage:/app/api/storage
-    depends_on:
-      - dify-api
-    networks:
-      - ai-platform
-
-  # Dify Web
-  dify-web:
-    image: langgenius/dify-web:latest
-    container_name: ai-platform-dify-web
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      CONSOLE_API_URL: ""
-      APP_API_URL: ""
-    depends_on:
-      - dify-api
-    networks:
-      - ai-platform
-
-  # Weaviate 向量数据库
   weaviate:
-    image: semitechnologies/weaviate:1.19.0
+    image: semitechnologies/weaviate:1.24.1
     container_name: ai-platform-weaviate
+    hostname: weaviate
     restart: unless-stopped
+
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
       PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
       DEFAULT_VECTORIZER_MODULE: 'none'
+      CLUSTER_HOSTNAME: 'weaviate'
+      ENABLE_MODULES: ''
+      LOG_LEVEL: 'info'
+
     volumes:
       - weaviate_data:/var/lib/weaviate
-    networks:
-      - ai-platform
 
-  # Nginx 反向代理
-  nginx:
-    image: nginx:alpine
-    container_name: ai-platform-nginx
+    ports:
+      - "8080:8080"
+
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/v1/.well-known/ready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+    networks:
+      - ai-platform-network
+
+  # ===========================================================================
+  # ⚙️ N8N - 工作流引擎
+  # ===========================================================================
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: ai-platform-n8n
+    hostname: n8n
     restart: unless-stopped
+
+    environment:
+      # 数据库配置
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME:-n8n}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-postgres}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-AIPlatform2026}
+
+      # N8N 配置
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: ${N8N_PORT:-5678}
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-your-32-char-encryption-key}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
+
+      # 执行配置
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: true
+
+      # 时区
+      GENERIC_TIMEZONE: ${TIMEZONE:-Asia/Tokyo}
+      TZ: ${TZ:-Asia/Tokyo}
+
+      # 日志
+      N8N_LOG_LEVEL: ${LOG_LEVEL:-info}
+
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/home/node/.n8n/workflows:ro
+
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - ai-platform-network
+
+  # ===========================================================================
+  # 🤖 Dify API - AI 应用后端
+  # ===========================================================================
+  dify-api:
+    image: langgenius/dify-api:0.6.6
+    container_name: ai-platform-dify-api
+    hostname: dify-api
+    restart: unless-stopped
+
+    environment:
+      MODE: api
+
+      # 密钥
+      SECRET_KEY: ${DIFY_SECRET_KEY:-sk-your-dify-secret-key-at-least-32-chars}
+
+      # 数据库
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-AIPlatform2026}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DIFY_DB_NAME:-dify}
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-Redis2026}
+      REDIS_DB: 0
+
+      # Celery
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-Redis2026}@redis:6379/1
+
+      # 存储
+      STORAGE_TYPE: local
+      STORAGE_LOCAL_PATH: /app/api/storage
+
+      # 向量数据库
+      VECTOR_STORE: weaviate
+      WEAVIATE_ENDPOINT: http://weaviate:8080
+
+      # 日志
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # 迁移
+      MIGRATION_ENABLED: 'true'
+
+    volumes:
+      - dify_storage:/app/api/storage
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5001/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
+
+    networks:
+      - ai-platform-network
+
+  # ===========================================================================
+  # 🔧 Dify Worker - 后台任务处理
+  # ===========================================================================
+  dify-worker:
+    image: langgenius/dify-api:0.6.6
+    container_name: ai-platform-dify-worker
+    hostname: dify-worker
+    restart: unless-stopped
+
+    environment:
+      MODE: worker
+
+      SECRET_KEY: ${DIFY_SECRET_KEY:-sk-your-dify-secret-key-at-least-32-chars}
+
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-AIPlatform2026}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DIFY_DB_NAME:-dify}
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-Redis2026}
+      REDIS_DB: 0
+
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-Redis2026}@redis:6379/1
+
+      STORAGE_TYPE: local
+      STORAGE_LOCAL_PATH: /app/api/storage
+
+      VECTOR_STORE: weaviate
+      WEAVIATE_ENDPOINT: http://weaviate:8080
+
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+    volumes:
+      - dify_storage:/app/api/storage
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+    depends_on:
+      - dify-api
+
+    networks:
+      - ai-platform-network
+
+  # ===========================================================================
+  # 🌐 Dify Web - 前端界面
+  # ===========================================================================
+  dify-web:
+    image: langgenius/dify-web:0.6.6
+    container_name: ai-platform-dify-web
+    hostname: dify-web
+    restart: unless-stopped
+
+    environment:
+      CONSOLE_API_URL: ""
+      APP_API_URL: ""
+      SENTRY_DSN: ""
+
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+    depends_on:
+      - dify-api
+
+    networks:
+      - ai-platform-network
+
+  # ===========================================================================
+  # 🔀 Nginx - 反向代理
+  # ===========================================================================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: ai-platform-nginx
+    hostname: nginx
+    restart: unless-stopped
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx_logs:/var/log/nginx
+
     ports:
       - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - "3000:3000"
+
+    healthcheck:
+      test: [ "CMD", "nginx", "-t" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
     depends_on:
       - n8n
       - dify-api
       - dify-web
+
     networks:
-      - ai-platform
+      - ai-platform-network
 
 # =============================================================================
-# Volumes
+# 数据卷
 # =============================================================================
 volumes:
   postgres_data:
-    name: ai_platform_postgres
+    name: ai-platform-postgres-data
   redis_data:
-    name: ai_platform_redis
-  n8n_data:
-    name: ai_platform_n8n
-  dify_storage:
-    name: ai_platform_dify_storage
+    name: ai-platform-redis-data
   weaviate_data:
-    name: ai_platform_weaviate
+    name: ai-platform-weaviate-data
+  n8n_data:
+    name: ai-platform-n8n-data
+  dify_storage:
+    name: ai-platform-dify-storage
+  nginx_logs:
+    name: ai-platform-nginx-logs
 
 # =============================================================================
-# Networks
+# 网络
 # =============================================================================
 networks:
-  ai-platform:
-    name: ai-platform
+  ai-platform-network:
+    name: ai-platform-network
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
