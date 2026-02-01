@@ -1,134 +1,205 @@
-# AI 辅助平台技术管理仓库
+# 🤖 AI 辅助平台技术管理仓库
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+[![N8N](https://img.shields.io/badge/N8N-Workflow-ff6d5a.svg)](https://n8n.io/)
+[![Dify](https://img.shields.io/badge/Dify-AI_Platform-1e88e5.svg)](https://dify.ai/)
 
-团队内部 AI 辅助平台的完整技术方案，包含架构设计、部署脚本和运维指南。
+---
 
-## 📋 项目概述
+## 📋 项目简介
 
-本项目构建一套**轻量级、可扩展的 AI 辅助平台**，用于：
+团队内部 **AI 辅助决策平台**，实现运维任务智能化处理。
 
-- 🔗 **运维任务智能收集** - Lark 消息自动识别、分析、创建 Jira
-- 🚨 **告警邮件智能分析** - 告警分类、知识库匹配、处理建议
-- 📊 **项目递交健康度评估** - 流程标准化、质量管控（后期）
+| 功能模块 | 说明 | 状态 |
+|----------|------|------|
+| 🔗 **任务收集** | Lark 消息 → AI 分析 → Jira 工单 | 开发中 |
+| 🚨 **告警分析** | 邮件告警 → AI 分类 → 知识匹配 → 通知 | 规划中 |
+| 📊 **健康评估** | 项目数据 → AI 评估 → 健康报告 | 规划中 |
+
+---
 
 ## 🏗️ 技术架构
 
 ```mermaid
-flowchart TB
-    subgraph External["🌐 外部系统"]
+flowchart LR
+    subgraph Input["📥 输入"]
         Lark["💬 Lark"]
         Email["📧 Email"]
-        Jira["📋 Jira"]
     end
 
-    subgraph Platform["🏢 AI 辅助平台"]
-        N8N["⚙️ N8N<br/>工作流编排"]
-        Dify["🤖 Dify<br/>AI 能力平台"]
-        OpenAI["🧠 OpenAI<br/>GPT-4o-mini"]
+    subgraph Core["🏢 AI 平台"]
+        N8N["⚙️ N8N"]
+        Dify["🤖 Dify"]
+        LLM["🧠 GPT-4o-mini"]
+    end
+
+    subgraph Output["📤 输出"]
+        Jira["📋 Jira"]
+        Notice["🔔 通知"]
     end
 
     Lark --> N8N
     Email --> N8N
-    N8N <--> Jira
     N8N <--> Dify
-    Dify --> OpenAI
+    Dify --> LLM
+    N8N --> Jira
+    N8N --> Notice
 
     style N8N fill:#ff6d5a,color:#fff
     style Dify fill:#1e88e5,color:#fff
-    style OpenAI fill:#10a37f,color:#fff
+    style LLM fill:#10a37f,color:#fff
 ```
 
-> 详细架构图请参阅 [系统架构设计](docs/architecture/system-architecture.md)
+> 📖 详细架构请参阅 [系统架构设计](docs/architecture/system-architecture.md)
+
+---
 
 ## 📁 项目结构
 
 ```
 ai-platform-technical/
-├── README.md                           # 本文件
-├── LICENSE                             # MIT 许可证
 │
-├── docs/                               # 📚 设计文档
-│   ├── architecture/                   # 架构设计
-│   │   └── system-architecture.md      # 系统架构设计
-│   ├── design/                         # 详细设计
-│   │   ├── module-a-task-collection.md # 模块A：任务收集
-│   │   ├── module-b-alert-analysis.md  # 模块B：告警分析
-│   │   └── module-c-health-check.md    # 模块C：健康度评估
-│   └── implementation/                 # 实施方案
-│       ├── implementation-plan.md      # 实施计划
-│       └── cost-estimation.md          # 成本估算
+├── 📄 README.md                 # 本文件
+├── 📄 LICENSE                   # MIT 许可证
 │
-├── deploy/                             # 🚀 部署脚本
-│   ├── n8n/                            # N8N 部署
-│   │   ├── docker/                     # Docker 部署
-│   │   └── k8s/                        # Kubernetes 部署
-│   ├── dify/                           # Dify 部署
-│   │   ├── docker/                     # Docker 部署
-│   │   └── k8s/                        # Kubernetes 部署
-│   └── infrastructure/                 # 基础设施
-│       └── docker-compose.yml          # 一键部署全套环境
+├── 📂 docs/                     # 📚 设计文档
+│   ├── architecture/
+│   │   └── system-architecture.md    # 系统架构（含流程图）
+│   ├── design/
+│   │   ├── module-a-task-collection.md   # 任务收集模块
+│   │   ├── module-b-alert-analysis.md    # 告警分析模块
+│   │   └── module-c-health-check.md      # 健康度评估模块
+│   └── implementation/
+│       ├── implementation-plan.md    # 实施计划
+│       └── cost-estimation.md        # 成本估算
 │
-├── config/                             # ⚙️ 配置模板
-│   ├── n8n/                            # N8N 工作流模板
-│   └── dify/                           # Dify Prompt 模板
+├── 📂 deploy/                   # 🚀 部署配置
+│   ├── infrastructure/          # ⭐ 一键部署（推荐）
+│   │   ├── docker-compose.yml
+│   │   ├── deploy.ps1           # Windows 脚本
+│   │   ├── deploy.sh            # Linux/macOS 脚本
+│   │   └── README.md
+│   ├── n8n/                     # N8N 独立部署
+│   │   ├── docker/
+│   │   └── k8s/
+│   └── dify/                    # Dify 独立部署
+│       └── docker/
 │
-└── scripts/                            # 🔧 工具脚本
-    ├── setup.sh                        # 环境初始化
-    └── backup.sh                       # 数据备份
+├── 📂 config/                   # ⚙️ 配置模板
+│   ├── dify/
+│   │   └── prompts.md           # Dify Prompt 模板
+│   └── n8n/                     # N8N 工作流配置
+│
+└── 📂 scripts/                  # 🔧 工具脚本
+    ├── setup.sh                 # 环境初始化
+    └── backup.sh                # 数据备份
 ```
+
+---
 
 ## 🚀 快速开始
 
 ### 环境要求
 
-- Docker & Docker Compose
-- 4GB+ 内存
-- 网络可访问 OpenAI API（或本地部署 Ollama）
+| 要求 | 最低配置 | 推荐配置 |
+|------|----------|----------|
+| Docker | ✅ 必须 | Docker Desktop |
+| 内存 | 8 GB | 16 GB |
+| CPU | 4 核 | 8 核 |
+| 磁盘 | 20 GB | 50 GB |
 
-### 一键部署（开发环境）
+### 一键部署（3 步完成）
 
-```bash
+```powershell
+# 1️⃣ 克隆仓库
+git clone https://github.com/karl9141/ai-platform-technical.git
+cd ai-platform-technical
+
+# 2️⃣ 进入部署目录
 cd deploy/infrastructure
-docker-compose up -d
+
+# 3️⃣ 一键启动
+.\deploy.ps1              # Windows
+# 或
+./deploy.sh               # Linux/macOS
 ```
 
-访问：
-- N8N: http://localhost:5678
-- Dify: http://localhost:3000
+### 访问服务
 
-### AWS EKS 部署
+| 服务 | 地址 | 用途 |
+|------|------|------|
+| **N8N** | http://localhost:5678 | 工作流管理 |
+| **Dify** | http://localhost:3000 | AI 应用配置 |
 
-详见 [N8N K8s 部署指南](deploy/n8n/k8s/README.md) 和 [Dify K8s 部署指南](deploy/dify/k8s/README.md)
+---
 
 ## 📚 文档索引
 
+### 架构设计
+
 | 文档 | 说明 |
 |------|------|
-| [系统架构设计](docs/architecture/system-architecture.md) | 整体架构、技术选型、组件说明 |
-| [任务收集模块设计](docs/design/module-a-task-collection.md) | 模块 A 详细设计 |
-| [告警分析模块设计](docs/design/module-b-alert-analysis.md) | 模块 B 详细设计 |
+| [系统架构设计](docs/architecture/system-architecture.md) | 整体架构、技术选型、流程图 |
+
+### 模块设计
+
+| 文档 | 说明 |
+|------|------|
+| [任务收集模块](docs/design/module-a-task-collection.md) | Lark → AI → Jira 流程 |
+| [告警分析模块](docs/design/module-b-alert-analysis.md) | 邮件告警智能处理 |
+| [健康度评估](docs/design/module-c-health-check.md) | 项目健康度 AI 评估 |
+
+### 实施方案
+
+| 文档 | 说明 |
+|------|------|
 | [实施计划](docs/implementation/implementation-plan.md) | 阶段规划、里程碑 |
 | [成本估算](docs/implementation/cost-estimation.md) | 服务器、API 成本 |
 
-## 💰 成本估算
+### 部署指南
 
-| 阶段 | 月成本 |
-|------|--------|
-| MVP（OpenAI API） | ~¥450 |
-| 成熟期（本地模型） | ~¥800 |
+| 文档 | 说明 |
+|------|------|
+| [一键部署指南](deploy/infrastructure/README.md) | ⭐ 推荐，全套环境 |
+| [N8N Docker 部署](deploy/n8n/docker/README.md) | N8N 独立部署 |
+| [N8N K8s 部署](deploy/n8n/k8s/README.md) | N8N 生产环境 |
+| [Dify Docker 部署](deploy/dify/docker/README.md) | Dify 独立部署 |
+
+---
+
+## 💰 成本概览
+
+| 阶段 | 月成本 | 说明 |
+|------|--------|------|
+| **MVP 开发期** | ~¥450 | 云端 API |
+| **稳定运行期** | ~¥500 | 优化后 |
+
+> 📖 详细成本分析请参阅 [成本估算](docs/implementation/cost-estimation.md)
+
+---
 
 ## 🛠️ 技术栈
 
-| 组件 | 技术 | 说明 |
+| 类别 | 技术 | 说明 |
 |------|------|------|
-| 工作流引擎 | N8N | 开源、可视化、400+ 集成 |
-| AI 平台 | Dify | 开源、RAG、多模型支持 |
-| LLM | OpenAI / Ollama | 云端或本地部署 |
-| 数据库 | PostgreSQL | 共享存储 |
-| 消息 | Lark Bot | 企业协作 |
-| 工单 | Jira API | 任务管理 |
+| **工作流** | N8N | 开源、可视化、400+ 集成 |
+| **AI 平台** | Dify | 开源、RAG、多模型 |
+| **LLM** | OpenAI GPT-4o-mini | 日本直连、成本低 |
+| **数据库** | PostgreSQL 16 | 共享存储 |
+| **缓存** | Redis 7 | 会话缓存 |
+| **向量库** | Weaviate | 知识检索 |
 
-## 📄 License
+---
 
-MIT License
+## 📄 许可证
+
+[MIT License](LICENSE)
+
+---
+
+## 🔗 相关链接
+
+- [GitHub 仓库](https://github.com/karl9141/ai-platform-technical)
+- [N8N 官方文档](https://docs.n8n.io/)
+- [Dify 官方文档](https://docs.dify.ai/)
