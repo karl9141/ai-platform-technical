@@ -1,0 +1,36 @@
+# Generated files
+.generated.yaml
+*.generated.*
+
+# Environment files with secrets
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Backups (don't commit to repo)
+backups/
+
+# Node modules (if any)
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Docker
+*.tar
