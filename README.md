@@ -74,26 +74,22 @@ ai-platform-technical/
 │       ├── implementation-plan.md    # 实施计划
 │       └── cost-estimation.md        # 成本估算
 │
-├── 📂 deploy/                   # 🚀 部署配置
-│   ├── infrastructure/          # ⭐ 一键部署（推荐）
-│   │   ├── docker-compose.yml
-│   │   ├── deploy.ps1           # Windows 脚本
-│   │   ├── deploy.sh            # Linux/macOS 脚本
-│   │   └── README.md
-│   ├── n8n/                     # N8N 独立部署
-│   │   ├── docker/
-│   │   └── k8s/
-│   └── dify/                    # Dify 独立部署
-│       └── docker/
+├── 📂 deploy/                   # 🚀 部署配置 (服务化架构)
+│   ├── README.md                # 📖 部署总览指南
+│   ├── .env.example             # 环境变量模板
+│   ├── docker-compose.yml       # 全量服务 Compose
+│   ├── deploy-local.ps1/sh      # 本地一键部署脚本
+│   ├── shared/                  # 共享基础设施 (Postgres, Redis, Nginx)
+│   ├── dify/                    # Dify AI 平台
+│   ├── n8n/                     # N8N 工作流引擎
+│   └── weaviate/                # 向量数据库
 │
 ├── 📂 config/                   # ⚙️ 配置模板
 │   ├── dify/
 │   │   └── prompts.md           # Dify Prompt 模板
 │   └── n8n/                     # N8N 工作流配置
 │
-└── 📂 scripts/                  # 🔧 工具脚本
-    ├── setup.sh                 # 环境初始化
-    └── backup.sh                # 数据备份
+└── 📂 scripts/                  # 🔧 其他工具脚本
 ```
 
 ---
@@ -116,21 +112,22 @@ ai-platform-technical/
 git clone https://github.com/karl9141/ai-platform-technical.git
 cd ai-platform-technical
 
-# 2️⃣ 进入部署目录
-cd deploy/infrastructure
+# 2️⃣ 进入部署目录并配置环境
+cd deploy
+cp .env.local .env
 
 # 3️⃣ 一键启动
-.\deploy.ps1              # Windows
+.\deploy-local.ps1              # Windows
 # 或
-./deploy.sh               # Linux/macOS
+./deploy-local.sh               # Linux/macOS
 ```
 
 ### 访问服务
 
 | 服务 | 地址 | 用途 |
 |------|------|------|
-| **N8N** | http://localhost:5678 | 工作流管理 |
 | **Dify** | http://localhost:3000 | AI 应用配置 |
+| **N8N** | http://localhost:5678 | 工作流管理 |
 
 ---
 
@@ -161,10 +158,9 @@ cd deploy/infrastructure
 
 | 文档 | 说明 |
 |------|------|
-| [一键部署指南](deploy/infrastructure/README.md) | ⭐ 推荐，全套环境 |
-| [N8N Docker 部署](deploy/n8n/docker/README.md) | N8N 独立部署 |
-| [N8N K8s 部署](deploy/n8n/k8s/README.md) | N8N 生产环境 |
-| [Dify Docker 部署](deploy/dify/docker/README.md) | Dify 独立部署 |
+| [全量部署指南](deploy/README.md) | ⭐ 推荐，包含所有服务 |
+| [Dify 配置说明](deploy/dify/README.md) | Dify 组件及配置 |
+| [N8N 配置说明](deploy/n8n/README.md) | N8N 环境配置 |
 
 ---
 
